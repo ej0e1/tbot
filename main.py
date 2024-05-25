@@ -53,7 +53,7 @@ async def perform_search(context: CallbackContext, chat_id: int, email: str, mes
         link_found = False  # Flag to track if the link has been found
         start_time = time.time()  # Get the current time
 
-        # Real-time search until the link is found or 1 minute has passed
+        # Real-time search until the link is found or 15second has passed
         while not link_found:
             # Check if 1 minute has passed
             if time.time() - start_time > 15:
@@ -112,7 +112,7 @@ def main():
     application.add_handler(CallbackQueryHandler(try_again, pattern=r"try_again:"))
 
     logger.info("Starting bot")
-    application.run_polling()
+    application.run_polling(workers=10)  # Increase concurrency by setting the number of worker threads
 
 if __name__ == '__main__':
     main()
