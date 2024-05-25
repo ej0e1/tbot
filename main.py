@@ -96,6 +96,7 @@ async def perform_search(context: CallbackContext, chat_id: int, email: str, mes
 async def search_email(update: Update, context: CallbackContext):
     email = update.message.text
     await perform_search(context, update.message.chat_id, email)
+    
 
 # Function to handle try again button clicks
 async def try_again(update: Update, context: CallbackContext):
@@ -111,8 +112,8 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, search_email))
     application.add_handler(CallbackQueryHandler(try_again, pattern=r"try_again:"))
 
-    logger.info("Starting bot")
-    application.run_polling()
+ logger.info("Starting bot")
+    application.run_polling(concurrency=10)  # Adjust the concurrency parameter as needed
 
 if __name__ == '__main__':
     main()
