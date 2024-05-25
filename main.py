@@ -13,15 +13,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Database credentials from environment variables
-DB_HOST = ('viaduct.proxy.rlwy.net')
-DB_PORT = ('33926')  # Port for PostgreSQL database
-DB_USER = ('postgres')
-DB_PASSWORD = ('kuUUzvojJDVoXVdtjfCIUIIyUzTJntjY')
-DB_NAME = ('railway')
+# Retrieve database credentials from environment variables
+DB_HOST = os.environ.get('DB_HOST')
+DB_PORT = os.environ.get('DB_PORT')
+DB_USER = os.environ.get('DB_USER')
+DB_PASSWORD = os.environ.get('DB_PASSWORD')
+DB_NAME = os.environ.get('DB_NAME')
 
 # Telegram bot token from environment variable
-BOT_TOKEN = ('6366027757:AAHVI9lPc75OWQJd_OmcWB34fMKg22yx7ZA')
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
 
 # Function to connect to the database
 def get_db_connection():
@@ -56,7 +56,7 @@ async def perform_search(context: CallbackContext, chat_id: int, email: str, mes
         # Real-time search until the link is found or 1 minute has passed
         while not link_found:
             # Check if 1 minute has passed
-            if time.time() - start_time > 20:
+            if time.time() - start_time > 15:
                 break
 
             # Query to get the link from the MESSAGE column where EMAIL matches
