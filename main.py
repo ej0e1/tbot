@@ -5,6 +5,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 import asyncio
 import time
 import logging
+import re
 
 # Enable logging
 logging.basicConfig(
@@ -33,6 +34,20 @@ def get_db_connection():
         database=DB_NAME
     )
     return connection
+
+# Function to validate email address format
+def is_valid_email(email):
+    # Regular expression for validating email addresses
+    pattern = r'^[\w\.-]+@[a-zA-Z\d\.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email) is not None
+
+# Function to handle user messages (email searches)
+async def search_email(update: Update, context: CallbackContext):
+    email = update.message.text.strip()
+    if is_valid_email(email):
+        await perform_search(context, update.message.chat_id, email)
+    else:
+        await update.message.reply_text("Please enter a valid email address.")
 
 # Function to handle the /start command
 async def start(update: Update, context: CallbackContext):
