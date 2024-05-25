@@ -57,7 +57,7 @@ async def perform_search(context: CallbackContext, chat_id: int, email: str, mes
         # Real-time search until the link is found or 1 minute has passed
         while not link_found:
             # Check if 1 minute has passed
-            if time.time() - start_time > 60:
+            if time.time() - start_time > 15:
                 break
 
             # Query to get the link from the MESSAGE column where EMAIL matches
