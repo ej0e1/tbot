@@ -5,7 +5,6 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 import asyncio
 import time
 import logging
-import re
 
 # Enable logging
 logging.basicConfig(
@@ -24,11 +23,8 @@ DB_NAME = os.environ.get('DB_NAME')
 # Telegram bot token from environment variable
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 
-# Regular expression pattern to validate email format
-EMAIL_REGEX = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-
 # Function to connect to the database
-async def get_db_connection():
+def get_db_connection():
     connection = psycopg2.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -44,7 +40,7 @@ async def start(update: Update, context: CallbackContext):
 
 # Function to perform the search
 async def perform_search(context: CallbackContext, chat_id: int, email: str, message_id: int = None):
-    connection = await get_db_connection()
+    connection = get_db_connection()
     cursor = connection.cursor()
 
     try:
@@ -60,7 +56,7 @@ async def perform_search(context: CallbackContext, chat_id: int, email: str, mes
         # Real-time search until the link is found or 1 minute has passed
         while not link_found:
             # Check if 1 minute has passed
-            if time.time() - start_time > 60:
+            if time.time() - start_time > 15:
                 break
 
             # Query to get the link from the MESSAGE column where EMAIL matches
@@ -98,14 +94,7 @@ async def perform_search(context: CallbackContext, chat_id: int, email: str, mes
 
 # Function to handle user messages (email searches)
 async def search_email(update: Update, context: CallbackContext):
-    email = update.message.text.strip()  # Remove leading/trailing whitespace
-
-    # Validate email format
-    if not re.match(EMAIL_REGEX, email):
-        await update.message.reply_text("Invalid email format. Please enter a valid email address.")
-        return
-
-    # Perform search if email format is valid
+    email = update.message.text
     await perform_search(context, update.message.chat_id, email)
 
 # Function to handle try again button clicks
@@ -116,14 +105,14 @@ async def try_again(update: Update, context: CallbackContext):
     await perform_search(context, query.message.chat_id, email, query.message.message_id)
 
 def main():
-    application = Application(builder=Application.builder().token(BOT_TOKEN))
+    application = Application.builder().token(BOT_TOKEN).read_timeout(20).write_timeout(20).connect_timeout(10).pool_timeout(10).build()
 
     application.add_handler(CommandHandler('start', start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, search_email))
     application.add_handler(CallbackQueryHandler(try_again, pattern=r"try_again:"))
 
     logger.info("Starting bot")
-    application.run_polling()  # Bot polling is still needed for receiving updates
+    application.run_polling()
 
 if __name__ == '__main__':
     main()
