@@ -93,13 +93,13 @@ async def perform_search(context: CallbackContext, chat_id: int, email: str, mes
         cursor.close()
         connection.close()
 
-# Function to handle user messages (email searches)
 async def search_email(update: Update, context: CallbackContext):
     email = update.message.text.strip()
-    if not is_valid_email(email):
+    if not email or not is_valid_email(email):
         await update.message.reply_text("Please enter a valid email address.")
         return
     await perform_search(context, update.message.chat_id, email)
+
 
 # Function to handle try again button clicks
 async def try_again(update: Update, context: CallbackContext):
