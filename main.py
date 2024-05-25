@@ -115,15 +115,7 @@ async def try_again(update: Update, context: CallbackContext):
     email = query.data.split(":")[1]
     await perform_search(context, query.message.chat_id, email, query.message.message_id)
 
-def main():
-    application = Application.builder().token(BOT_TOKEN).read_timeout(20).write_timeout(20).connect_timeout(10).pool_timeout(10).build()
 
-    application.add_handler(CommandHandler('start', start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, search_email))
-    application.add_handler(CallbackQueryHandler(try_again, pattern=r"try_again:"))
-
-    logger.info("Starting bot")
-    application.run_polling(concurrency=10)  # Adjust the concurrency parameter as needed
 
 if __name__ == '__main__':
     main()
