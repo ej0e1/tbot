@@ -1,0 +1,11 @@
+[project]
+name = "tbot"
+version = "0.1.0"
+description = "A Telegram bot that searches for links in a database based on email input"
+authors = [
+    { name = "Romamti", email = "ej03991@gmail.com" }
+]
+dependencies = [
+    "aiogram",
+    "asyncpg"
+]
