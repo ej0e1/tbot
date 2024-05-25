@@ -5,6 +5,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 import asyncio
 import time
 import logging
+import re
 
 # Enable logging
 logging.basicConfig(
@@ -22,6 +23,9 @@ DB_NAME = os.environ.get('DB_NAME')
 
 # Telegram bot token from environment variable
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
+
+# Regular expression pattern to validate email format
+EMAIL_REGEX = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 
 # Function to connect to the database
 def get_db_connection():
@@ -53,10 +57,10 @@ async def perform_search(context: CallbackContext, chat_id: int, email: str, mes
         link_found = False  # Flag to track if the link has been found
         start_time = time.time()  # Get the current time
 
-        # Real-time search until the link is found or 15second has passed
+        # Real-time search until the link is found or 1 minute has passed
         while not link_found:
             # Check if 1 minute has passed
-            if time.time() - start_time > 15:
+            if time.time() - start_time > 60:
                 break
 
             # Query to get the link from the MESSAGE column where EMAIL matches
@@ -94,7 +98,14 @@ async def perform_search(context: CallbackContext, chat_id: int, email: str, mes
 
 # Function to handle user messages (email searches)
 async def search_email(update: Update, context: CallbackContext):
-    email = update.message.text
+    email = update.message.text.strip()  # Remove leading/trailing whitespace
+
+    # Validate email format
+    if not re.match(EMAIL_REGEX, email):
+        await update.message.reply_text("Invalid email format. Please enter a valid email address.")
+        return
+
+    # Perform search if email format is valid
     await perform_search(context, update.message.chat_id, email)
 
 # Function to handle try again button clicks
@@ -112,7 +123,7 @@ def main():
     application.add_handler(CallbackQueryHandler(try_again, pattern=r"try_again:"))
 
     logger.info("Starting bot")
-    application.run_polling(workers=10)  # Increase concurrency by setting the number of worker threads
+    application.run_polling(concurrency=10)  # Adjust the concurrency parameter as needed
 
 if __name__ == '__main__':
     main()
