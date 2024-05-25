@@ -35,20 +35,6 @@ def get_db_connection():
     )
     return connection
 
-# Function to validate email address format
-def is_valid_email(email):
-    # Regular expression for validating email addresses
-    pattern = r'^[\w\.-]+@[a-zA-Z\d\.-]+\.[a-zA-Z]{2,}$'
-    return re.match(pattern, email) is not None
-
-# Function to handle user messages (email searches)
-async def search_email(update: Update, context: CallbackContext):
-    email = update.message.text.strip()
-    if is_valid_email(email):
-        await perform_search(context, update.message.chat_id, email)
-    else:
-        await update.message.reply_text("Please enter a valid email address.")
-
 # Function to handle the /start command
 async def start(update: Update, context: CallbackContext):
     await update.message.reply_text('Hello! Send an email to search for the corresponding link in the database.')
@@ -71,7 +57,7 @@ async def perform_search(context: CallbackContext, chat_id: int, email: str, mes
         # Real-time search until the link is found or 1 minute has passed
         while not link_found:
             # Check if 1 minute has passed
-            if time.time() - start_time > 15:
+            if time.time() - start_time > 60:
                 break
 
             # Query to get the link from the MESSAGE column where EMAIL matches
@@ -109,7 +95,10 @@ async def perform_search(context: CallbackContext, chat_id: int, email: str, mes
 
 # Function to handle user messages (email searches)
 async def search_email(update: Update, context: CallbackContext):
-    email = update.message.text
+    email = update.message.text.strip()
+    if not is_valid_email(email):
+        await update.message.reply_text("Please enter a valid email address.")
+        return
     await perform_search(context, update.message.chat_id, email)
 
 # Function to handle try again button clicks
@@ -118,6 +107,12 @@ async def try_again(update: Update, context: CallbackContext):
     await query.answer()
     email = query.data.split(":")[1]
     await perform_search(context, query.message.chat_id, email, query.message.message_id)
+
+# Function to validate email address format
+def is_valid_email(email):
+    # Regular expression for validating email addresses
+    pattern = r'^[\w\.-]+@[a-zA-Z\d\.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email) is not None
 
 def main():
     application = Application.builder().token(BOT_TOKEN).read_timeout(20).write_timeout(20).connect_timeout(10).pool_timeout(10).build()
