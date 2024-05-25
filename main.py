@@ -1,10 +1,10 @@
-import random
-import asyncpg
-from aiogram import Bot, Dispatcher, executor, types
+import os
+import psycopg2
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, CallbackContext
 import asyncio
 import time
 import logging
-import os
 
 # Enable logging
 logging.basicConfig(
@@ -13,98 +13,106 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Read database credentials from environment variables
-DB_HOST = os.environ.get('DB_HOST')
-DB_PORT = os.environ.get('DB_PORT')
-DB_USER = os.environ.get('DB_USER')
-DB_PASSWORD = os.environ.get('DB_PASSWORD')
-DB_NAME = os.environ.get('DB_NAME')
+# Database credentials from environment variables
+DB_HOST = ('viaduct.proxy.rlwy.net')
+DB_PORT = ('33926')  # Port for PostgreSQL database
+DB_USER = ('postgres')
+DB_PASSWORD = ('kuUUzvojJDVoXVdtjfCIUIIyUzTJntjY')
+DB_NAME = ('railway')
 
-# Read Telegram bot token from environment variable
-BOT_TOKEN = os.environ.get('BOT_TOKEN')
+# Telegram bot token from environment variable
+BOT_TOKEN = ('6366027757:AAHVI9lPc75OWQJd_OmcWB34fMKg22yx7ZA')
 
-# Create a connection pool
-async def get_db_connection():
-    return await asyncpg.create_pool(
-        user=DB_USER,
-        password=DB_PASSWORD,
+# Function to connect to the database
+def get_db_connection():
+    connection = psycopg2.connect(
         host=DB_HOST,
         port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
         database=DB_NAME
     )
+    return connection
 
-# Generate a random ID
-def generate_random_id():
-    return random.randint(1, 1000000)  # Adjust range as needed
-
-# Initialize bot and dispatcher
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher(bot)
-
-# Function to insert temp_code
-async def insert_temp_code(chat_id, email, message):
-    connection = await get_db_connection()
-    try:
-        random_id = generate_random_id()
-        query = """
-        INSERT INTO temp_code (id, chat_id, email, message) VALUES ($1, $2, $3, $4);
-        """
-        await connection.execute(query, random_id, chat_id, email, message)
-    except asyncpg.PostgresError as err:
-        logger.error(f"Database error during insert: {err}")
-    finally:
-        await connection.close()
+# Function to handle the /start command
+async def start(update: Update, context: CallbackContext):
+    await update.message.reply_text('Hello! Send an email to search for the corresponding link in the database.')
 
 # Function to perform the search
-async def perform_search(chat_id: int, email: str):
-    connection = await get_db_connection()
+async def perform_search(context: CallbackContext, chat_id: int, email: str, message_id: int = None):
+    connection = get_db_connection()
+    cursor = connection.cursor()
 
     try:
-        # Query to get the link from the MESSAGE column where EMAIL matches
-        query = "SELECT message FROM temp_code WHERE chat_id = $1 AND email = $2"
-        result = await connection.fetchval(query, chat_id, email)
-
-        if result:
-            return result
+        # Send a loading message if not provided
+        if message_id is None:
+            loading_message = await context.bot.send_message(chat_id=chat_id, text="Searching for the link...")
         else:
-            return None
-    except asyncpg.PostgresError as err:
+            loading_message = await context.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text="Searching for the link...")
+
+        link_found = False  # Flag to track if the link has been found
+        start_time = time.time()  # Get the current time
+
+        # Real-time search until the link is found or 1 minute has passed
+        while not link_found:
+            # Check if 1 minute has passed
+            if time.time() - start_time > 60:
+                break
+
+            # Query to get the link from the MESSAGE column where EMAIL matches
+            query = "SELECT MESSAGE FROM temp_code WHERE EMAIL = %s"
+            cursor.execute(query, (email,))
+            result = cursor.fetchone()
+
+            if result:
+                link = result[0]
+                keyboard = [[InlineKeyboardButton("Link", url=link)]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await loading_message.delete()  # Delete the loading message
+                await context.bot.send_message(chat_id=chat_id, text="Here is your link:", reply_markup=reply_markup)
+                
+                # Delete the row after retrieving the link
+                delete_query = "DELETE FROM temp_code WHERE EMAIL = %s"
+                cursor.execute(delete_query, (email,))
+                connection.commit()
+                link_found = True  # Set flag to True when link is found
+            else:
+                # Wait for a short period before the next query
+                await asyncio.sleep(1)
+
+        if not link_found:
+            await loading_message.delete()  # Delete the loading message
+            keyboard = [[InlineKeyboardButton("Try Again", callback_data=f"try_again:{email}")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await context.bot.send_message(chat_id=chat_id, text='No link found for this email.', reply_markup=reply_markup)
+    except psycopg2.Error as err:
         logger.error(f"Database error: {err}")
-        return None
+        await context.bot.send_message(chat_id=chat_id, text=f"Error: {err}")
     finally:
-        await connection.close()
+        cursor.close()
+        connection.close()
 
-# Command handler
-@dp.message_handler(commands=['start'])
-async def start(message: types.Message):
-    await message.reply('Hello! Send an email to search for the corresponding link in the database.')
+# Function to handle user messages (email searches)
+async def search_email(update: Update, context: CallbackContext):
+    email = update.message.text
+    await perform_search(context, update.message.chat_id, email)
 
-# Text handler
-@dp.message_handler(filters.Text & ~filters.Command)
-async def search_email(message: types.Message):
-    chat_id = message.chat.id
-    email = message.text
-    link = await perform_search(chat_id, email)
-    if link:
-        keyboard = types.InlineKeyboardMarkup()
-        keyboard.add(types.InlineKeyboardButton("Link", url=link))
-        await message.reply("Here is your link:", reply_markup=keyboard)
-    else:
-        keyboard = types.InlineKeyboardMarkup()
-        keyboard.add(types.InlineKeyboardButton("Try Again", callback_data=f"try_again:{email}"))
-        await message.reply('No link found for this email.', reply_markup=keyboard)
+# Function to handle try again button clicks
+async def try_again(update: Update, context: CallbackContext):
+    query = update.callback_query
+    await query.answer()
+    email = query.data.split(":")[1]
+    await perform_search(context, query.message.chat_id, email, query.message.message_id)
 
-# Callback handler
-@dp.callback_query_handler(lambda c: c.data and c.data.startswith('try_again:'))
-async def try_again(callback_query: types.CallbackQuery):
-    email = callback_query.data.split(":")[1]
-    await perform_search(callback_query.message.chat.id, email)
+def main():
+    application = Application.builder().token(BOT_TOKEN).read_timeout(20).write_timeout(20).connect_timeout(10).pool_timeout(10).build()
 
-# Error handler
-@dp.errors_handler()
-async def error_handler(update, error):
-    logger.error(f'Update {update} caused error {error}')
+    application.add_handler(CommandHandler('start', start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, search_email))
+    application.add_handler(CallbackQueryHandler(try_again, pattern=r"try_again:"))
 
-# Start the bot
+    logger.info("Starting bot")
+    application.run_polling()
+
 if __name__ == '__main__':
-    executor.start_polling(dp, skip_updates=True)
+    main()
